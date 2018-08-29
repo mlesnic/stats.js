@@ -2,170 +2,151 @@
  * @author mrdoob / http://mrdoob.com/
  */
 
-var Stats = function () {
-
-	var mode = 0;
-
-	var container = document.createElement( 'div' );
-	container.style.cssText = 'position:fixed;top:0;left:0;cursor:pointer;opacity:0.9;z-index:10000';
-	container.addEventListener( 'click', function ( event ) {
-
-		event.preventDefault();
-		showPanel( ++ mode % container.children.length );
-
-	}, false );
-
-	//
-
-	function addPanel( panel ) {
-
-		container.appendChild( panel.dom );
-		return panel;
-
-	}
-
-	function showPanel( id ) {
-
-		for ( var i = 0; i < container.children.length; i ++ ) {
-
-			container.children[ i ].style.display = i === id ? 'block' : 'none';
-
-		}
-
-		mode = id;
-
-	}
-
-	//
-
-	var beginTime = ( performance || Date ).now(), prevTime = beginTime, frames = 0;
-
-	var fpsPanel = addPanel( new Stats.Panel( 'FPS', '#0ff', '#002' ) );
-	var msPanel = addPanel( new Stats.Panel( 'MS', '#0f0', '#020' ) );
-
-	if ( self.performance && self.performance.memory ) {
-
-		var memPanel = addPanel( new Stats.Panel( 'MB', '#f08', '#201' ) );
-
-	}
-
-	showPanel( 0 );
-
-	return {
-
-		REVISION: 16,
-
-		dom: container,
-
-		addPanel: addPanel,
-		showPanel: showPanel,
-
-		begin: function () {
-
-			beginTime = ( performance || Date ).now();
-
-		},
-
-		end: function () {
-
-			frames ++;
-
-			var time = ( performance || Date ).now();
-
-			msPanel.update( time - beginTime, 200 );
-
-			if ( time >= prevTime + 1000 ) {
-
-				fpsPanel.update( ( frames * 1000 ) / ( time - prevTime ), 100 );
-
-				prevTime = time;
-				frames = 0;
-
-				if ( memPanel ) {
-
-					var memory = performance.memory;
-					memPanel.update( memory.usedJSHeapSize / 1048576, memory.jsHeapSizeLimit / 1048576 );
-
-				}
-
-			}
-
-			return time;
-
-		},
-
-		update: function () {
-
-			beginTime = this.end();
-
-		},
-
-		// Backwards Compatibility
-
-		domElement: container,
-		setMode: showPanel
-
-	};
-
-};
-
-Stats.Panel = function ( name, fg, bg ) {
-
-	var min = Infinity, max = 0, round = Math.round;
-	var PR = round( window.devicePixelRatio || 1 );
-
-	var WIDTH = 80 * PR, HEIGHT = 48 * PR,
-			TEXT_X = 3 * PR, TEXT_Y = 2 * PR,
-			GRAPH_X = 3 * PR, GRAPH_Y = 15 * PR,
-			GRAPH_WIDTH = 74 * PR, GRAPH_HEIGHT = 30 * PR;
-
-	var canvas = document.createElement( 'canvas' );
-	canvas.width = WIDTH;
-	canvas.height = HEIGHT;
-	canvas.style.cssText = 'width:80px;height:48px';
-
-	var context = canvas.getContext( '2d' );
-	context.font = 'bold ' + ( 9 * PR ) + 'px Helvetica,Arial,sans-serif';
-	context.textBaseline = 'top';
-
-	context.fillStyle = bg;
-	context.fillRect( 0, 0, WIDTH, HEIGHT );
-
-	context.fillStyle = fg;
-	context.fillText( name, TEXT_X, TEXT_Y );
-	context.fillRect( GRAPH_X, GRAPH_Y, GRAPH_WIDTH, GRAPH_HEIGHT );
-
-	context.fillStyle = bg;
-	context.globalAlpha = 0.9;
-	context.fillRect( GRAPH_X, GRAPH_Y, GRAPH_WIDTH, GRAPH_HEIGHT );
-
-	return {
-
-		dom: canvas,
-
-		update: function ( value, maxValue ) {
-
-			min = Math.min( min, value );
-			max = Math.max( max, value );
-
-			context.fillStyle = bg;
-			context.globalAlpha = 1;
-			context.fillRect( 0, 0, WIDTH, GRAPH_Y );
-			context.fillStyle = fg;
-			context.fillText( round( value ) + ' ' + name + ' (' + round( min ) + '-' + round( max ) + ')', TEXT_X, TEXT_Y );
-
-			context.drawImage( canvas, GRAPH_X + PR, GRAPH_Y, GRAPH_WIDTH - PR, GRAPH_HEIGHT, GRAPH_X, GRAPH_Y, GRAPH_WIDTH - PR, GRAPH_HEIGHT );
-
-			context.fillRect( GRAPH_X + GRAPH_WIDTH - PR, GRAPH_Y, PR, GRAPH_HEIGHT );
-
-			context.fillStyle = bg;
-			context.globalAlpha = 0.9;
-			context.fillRect( GRAPH_X + GRAPH_WIDTH - PR, GRAPH_Y, PR, round( ( 1 - ( value / maxValue ) ) * GRAPH_HEIGHT ) );
-
-		}
-
-	};
-
-};
-
-export { Stats as default };
+ import PropTypes from 'prop-types';
+ import React, { Component } from 'react';
+ import {
+   View,
+   Text,
+   StyleSheet,
+   Platform
+ } from 'react-native';
+
+ const graphHeight = 35;
+ const graphWidth = 90;
+
+ const styles = StyleSheet.create({
+   main: {
+     zIndex: 999999,
+     position: 'absolute',
+     height: 60,
+     width: (graphWidth + 6),
+     padding: 3,
+     backgroundColor: '#000a12',
+     color: '#cfd8dc',
+     fontSize: 9,
+     lineHeight: 10,
+     top: 10,
+     right: 10,
+   },
+   graphStyle: {
+     position: 'absolute',
+     left: 3,
+     right: 3,
+     bottom: 3,
+     height: graphHeight,
+     backgroundColor: '#263238',
+   },
+   textFps: {
+     fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'sans-serif',
+     fontWeight: 'bold',
+     color: '#cfd8dc',
+     fontSize: 12,
+   }
+ });
+
+ class FPSStats extends Component {
+   constructor(props) {
+     super(props);
+     const currentTime = +new Date();
+
+     this.state = {
+       frames: 0,
+       startTime: currentTime,
+       prevTime: currentTime,
+       fps: []
+     };
+   }
+
+   shouldComponentUpdate(nextProps, nextState) {
+     return this.state.fps !== nextState.fps;
+   }
+
+   componentDidMount() {
+     if (!this.props.isActive) {
+       return;
+     }
+
+     const onRequestAnimationFrame = () => {
+       this.calcFPS();
+
+       requestAnimationFrame(onRequestAnimationFrame);
+     };
+
+     requestAnimationFrame(onRequestAnimationFrame);
+   }
+
+   calcFPS = () => {
+     let currentTime = +new Date();
+
+     this.setState({
+       frames: this.state.frames + 1
+     });
+
+     if (currentTime > this.state.prevTime + 1000) {
+       let fps = Math.round(
+         (this.state.frames * 1000) / (currentTime - this.state.prevTime)
+       );
+
+       fps = this.state.fps.concat(fps);
+       let sliceStart = fps.length - graphWidth;
+
+       if (sliceStart < 0) {
+         sliceStart = 0;
+       }
+
+       fps = fps.slice(sliceStart, fps.length);
+
+       this.setState({
+         fps: fps,
+         frames: 0,
+         prevTime: currentTime
+       });
+     }
+   };
+
+   render() {
+     if (!this.props.isActive) {
+       return null;
+     }
+
+     const maxFps = Math.max.apply(Math.max, this.state.fps);
+
+     const graphItems = this.state.fps.map((fps, i) => {
+       const height = (graphHeight * fps) / maxFps;
+
+       const graphItemStyle = StyleSheet.create({
+         graphItemStyle: {
+           position: 'absolute',
+           bottom: 0,
+           right: (this.state.fps.length -1 - i),
+           height: height,
+           width: 1,
+           backgroundColor: '#cfd8dc',
+         }
+       });
+
+       return (<View key={'fps-' + i} style={graphItemStyle.graphItemStyle} />)
+     });
+
+     return (
+       <View style={styles.main} >
+         <Text style={styles.textFps}>
+           {this.state.fps[this.state.fps.length - 1] + ' FPS'}
+         </Text>
+         <View style={styles.graphStyle} >
+           {graphItems}
+         </View>
+       </View>
+     )
+   }
+ }
+
+ FPSStats.propTypes = {
+   isActive: PropTypes.bool,
+ };
+
+ FPSStats.defaultProps = {
+   isActive: true,
+ };
+
+ export default FPSStats;
